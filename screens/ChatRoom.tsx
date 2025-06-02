@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { View, TextInput, Button, FlatList, Text, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import axios from 'axios';
 import { socket } from '../utils/socket';
@@ -9,6 +9,7 @@ export default function ChatRoom({ route }: { route: any }) {
   const [messages, setMessages] = useState<any[]>([]);
   const [text, setText] = useState('');
   const [sender, setSender] = useState('');
+  const flatListRef = useRef<FlatList<any>>(null);
 
   useEffect(() => {
     socket.emit('joinRoom', room._id);
@@ -24,6 +25,13 @@ export default function ChatRoom({ route }: { route: any }) {
       socket.off('newMessage');
     };
   }, []);
+
+  // Scroll to bottom when messages change
+  useEffect(() => {
+    if (flatListRef.current && messages.length > 0) {
+      flatListRef.current.scrollToEnd({ animated: true });
+    }
+  }, [messages]);
 
   const sendMessage = () => {
     if (!sender.trim() || !text.trim()) return;
@@ -50,6 +58,7 @@ export default function ChatRoom({ route }: { route: any }) {
     >
       <Text style={styles.roomName}>{room.name}</Text>
       <FlatList
+        ref={flatListRef}
         data={messages}
         keyExtractor={item => item._id}
         renderItem={renderItem}
