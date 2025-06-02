@@ -1,14 +1,19 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, TextInput, Button, FlatList, Text, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, TextInput, Button, FlatList, Text, StyleSheet, KeyboardAvoidingView, Platform, TouchableOpacity } from 'react-native';
 import axios from 'axios';
 import { socket } from '../utils/socket';
 import { API_URL } from '../utils/api';
+import { AntDesign } from '@expo/vector-icons'; // Nếu bạn dùng Expo, nếu không thì dùng icon khác
 
 export default function ChatRoom({ route }: { route: any }) {
   const { room } = route.params;
   const [messages, setMessages] = useState<any[]>([]);
   const [text, setText] = useState('');
   const [sender, setSender] = useState('');
+  const [showScrollToEnd, setShowScrollToEnd] = useState(false);
+  const [hasNewMessage, setHasNewMessage] = useState(false);
+  const isAtBottom = useRef(true);
+  const prevMessagesLength = useRef(0);
   const flatListRef = useRef<FlatList<any>>(null);
 
   useEffect(() => {
@@ -26,11 +31,35 @@ export default function ChatRoom({ route }: { route: any }) {
     };
   }, []);
 
-  // Scroll to bottom when messages change
+  // Khi vào phòng chat, tự động cuộn xuống cuối 1 lần duy nhất
   useEffect(() => {
     if (flatListRef.current && messages.length > 0) {
-      flatListRef.current.scrollToEnd({ animated: true });
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: false });
+      }, 100);
     }
+  }, [messages.length === 1]); // chỉ chạy khi load lần đầu
+
+  // Theo dõi scroll để biết có ở cuối không
+  const handleScroll = (event: any) => {
+    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+    const atBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 20;
+    isAtBottom.current = atBottom;
+    if (atBottom) {
+      setHasNewMessage(false);
+    }
+  };
+
+  // Khi có tin nhắn mới, nếu không ở cuối thì hiện icon
+  useEffect(() => {
+    if (messages.length > prevMessagesLength.current) {
+      if (!isAtBottom.current) {
+        setHasNewMessage(true);
+      } else {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }
+    }
+    prevMessagesLength.current = messages.length;
   }, [messages]);
 
   const sendMessage = () => {
@@ -50,6 +79,14 @@ export default function ChatRoom({ route }: { route: any }) {
     </View>
   );
 
+  // Hàm cuộn xuống cuối khi bấm icon
+  const scrollToEnd = () => {
+    if (flatListRef.current) {
+      flatListRef.current.scrollToEnd({ animated: true });
+      setHasNewMessage(false);
+    }
+  };
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -57,13 +94,22 @@ export default function ChatRoom({ route }: { route: any }) {
       keyboardVerticalOffset={80}
     >
       <Text style={styles.roomName}>{room.name}</Text>
-      <FlatList
-        ref={flatListRef}
-        data={messages}
-        keyExtractor={item => item._id}
-        renderItem={renderItem}
-        contentContainerStyle={styles.messagesList}
-      />
+      <View style={{ flex: 1 }}>
+        <FlatList
+          ref={flatListRef}
+          data={messages}
+          keyExtractor={item => item._id}
+          renderItem={renderItem}
+          contentContainerStyle={styles.messagesList}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+        />
+        {hasNewMessage && (
+          <TouchableOpacity style={styles.scrollToEndBtn} onPress={scrollToEnd}>
+            <AntDesign name="downcircle" size={36} color="#007AFF" />
+          </TouchableOpacity>
+        )}
+      </View>
       <View style={styles.inputContainer}>
         <TextInput
           value={sender}
@@ -150,5 +196,14 @@ const styles = StyleSheet.create({
     padding: 8,
     marginBottom: 8,
     backgroundColor: '#f9f9f9',
+  },
+  scrollToEndBtn: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    zIndex: 10,
+    backgroundColor: 'rgba(255,255,255,0.8)',
+    borderRadius: 20,
+    padding: 2,
   },
 });
