@@ -17,6 +17,13 @@ export default function ChatRoom({ route }: { route: any }) {
   const flatListRef = useRef<FlatList<any>>(null);
 
   useEffect(() => {
+    // Khi socket kết nối lại, join lại phòng
+    const handleConnect = () => {
+      socket.emit('joinRoom', room._id);
+    };
+    socket.on('connect', handleConnect);
+
+    // Đảm bảo join phòng ngay khi vào
     socket.emit('joinRoom', room._id);
     axios.get(`${API_URL}/api/chat/rooms/${room._id}/messages`).then(res => {
       setMessages(res.data);
@@ -28,8 +35,9 @@ export default function ChatRoom({ route }: { route: any }) {
 
     return () => {
       socket.off('newMessage');
+      socket.off('connect', handleConnect);
     };
-  }, []);
+  }, [room._id]);
 
   // Khi vào phòng chat, tự động cuộn xuống cuối 1 lần duy nhất
   useEffect(() => {
@@ -62,14 +70,19 @@ export default function ChatRoom({ route }: { route: any }) {
     prevMessagesLength.current = messages.length;
   }, [messages]);
 
-  const sendMessage = () => {
+  const sendMessage = async () => {
     if (!sender.trim() || !text.trim()) return;
-    socket.emit('sendMessage', {
-      chatRoomId: room._id,
-      sender,
-      content: text,
-    });
-    setText('');
+    try {
+      await axios.post(`${API_URL}/api/chat/messages`, {
+        chatRoomId: room._id,
+        sender,
+        content: text,
+      });
+      setText('');
+    } catch (error) {
+      // Bạn có thể xử lý lỗi ở đây nếu muốn
+      console.error('Send message error:', error);
+    }
   };
 
   const renderItem = ({ item }: { item: any }) => (
